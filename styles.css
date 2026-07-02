@@ -236,6 +236,7 @@ button:disabled {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     height: 100%;
     max-width: 800px; /* Limit board width on very wide screens */
 }
@@ -283,10 +284,12 @@ button:disabled {
 #chessboard {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(16, 1fr);
+    grid-template-rows: repeat(12, 1fr);
     width: 100%;
-    max-height: 65vh;
-    max-width: 32.5vh;
+    max-height: 90vh;
+    max-height: 90dvh;
+    max-width: 45vh;
+    max-width: 45dvh;
     aspect-ratio: 1 / 2;
     border: 3px solid #fff;
     position: relative;

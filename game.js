@@ -1,5 +1,8 @@
 // Socket.io Client
-const socket = io();
+let socket = null;
+if (typeof io !== 'undefined') {
+    socket = io();
+}
 let currentRoomCode = null;
 let myPlayerNumber = 1;
 
@@ -111,12 +114,27 @@ function init() {
 }
 
 function setupEventListeners() {
+    const btnStartLocal = document.getElementById('btn-start-local');
+    if (btnStartLocal) {
+        btnStartLocal.addEventListener('pointerdown', () => {
+            currentRoomCode = null;
+            enterFullscreen();
+            startDraftPhase(1);
+        });
+    }
+
+    const btnReady = document.getElementById('btn-ready');
+    if (btnReady) {
+        btnReady.addEventListener('pointerdown', handleTransitionReady);
+    }
+
     const btnCreateRoom = document.getElementById('btn-create-room');
     const btnJoinRoom = document.getElementById('btn-join-room');
     const inputRoomCode = document.getElementById('room-code-input');
 
     if (btnCreateRoom) {
         btnCreateRoom.addEventListener('pointerdown', () => {
+            if (!socket) return alert("Online mode is not available right now. Please launch the server.");
             enterFullscreen();
             socket.emit('createRoom');
         });
@@ -124,6 +142,7 @@ function setupEventListeners() {
 
     if (btnJoinRoom) {
         btnJoinRoom.addEventListener('pointerdown', () => {
+            if (!socket) return alert("Online mode is not available right now. Please launch the server.");
             enterFullscreen();
             const code = inputRoomCode.value.trim().toUpperCase();
             if (code.length === 4) {
@@ -135,7 +154,8 @@ function setupEventListeners() {
     }
 
     // Socket Events
-    socket.on('roomCreated', (code) => {
+    if (socket) {
+        socket.on('roomCreated', (code) => {
         currentRoomCode = code;
         myPlayerNumber = 1;
         document.getElementById('waiting-room-code').textContent = code;
@@ -187,9 +207,9 @@ function setupEventListeners() {
 
             if (myPlayerNumber === winner) {
                 fireConfetti([winnerColorHex, '#f1c40f']);
-                endGame('Victory!', `You captured the King!`);
+                endGame('Victory!', `You captured the King!`, winner);
             } else {
-                endGame('Defeat...', `Player ${winner} captured your King.`);
+                endGame('Defeat...', `Player ${winner} captured your King.`, winner);
             }
             return;
         }
@@ -242,6 +262,8 @@ function setupEventListeners() {
     socket.on('errorMsg', (msg) => {
         alert(msg);
     });
+    } // End of if (socket)
+    
     ui.btnMainMenu.addEventListener('pointerdown', () => {
         if (currentRoomCode) {
             socket.emit('leaveRoom', { roomCode: currentRoomCode });
@@ -331,25 +353,37 @@ function enterFullscreen() {
 // P1 draft rows 0-5 map to board rows 6-11.
 // P2 draft rows 0-5 map to board rows 5-0 (inverted).
 function getBoardCoords(viewR, viewC) {
-    if (myPlayerNumber === 1) {
-        return { r: viewR + (gameState === 'gameplay' ? 0 : 4), c: viewC };
-    } else {
-        if (gameState === 'gameplay') {
+    if (gameState === 'gameplay') {
+        if (currentRoomCode && myPlayerNumber === 2) {
             return { r: (ROWS - 1) - viewR, c: (COLS - 1) - viewC };
         } else {
-            return { r: 7 - viewR, c: 7 - viewC };
+            return { r: viewR, c: viewC };
+        }
+    } else {
+        const activePlayer = currentRoomCode ? myPlayerNumber : currentPlayer;
+        if (activePlayer === 1) {
+            return { r: viewR + 6, c: viewC };
+        } else {
+            return { r: 5 - viewR, c: 7 - viewC };
         }
     }
 }
 
 function getViewCoords(r, c) {
     if (gameState === 'gameplay') {
-        if (myPlayerNumber === 1) return { viewR: r, viewC: c };
-        else return { viewR: 11 - r, viewC: 7 - c };
+        if (currentRoomCode && myPlayerNumber === 2) {
+            return { viewR: (ROWS - 1) - r, viewC: (COLS - 1) - c };
+        } else {
+            return { viewR: r, viewC: c };
+        }
+    } else {
+        const activePlayer = currentRoomCode ? myPlayerNumber : currentPlayer;
+        if (activePlayer === 1) {
+            return { viewR: r - 6, viewC: c };
+        } else {
+            return { viewR: 5 - r, viewC: 7 - c };
+        }
     }
-    // draft mode mapping
-    if (myPlayerNumber === 1) return { viewR: r - 6, viewC: c };
-    else return { viewR: 5 - r, viewC: 7 - c };
 }
 
 // Returns the drafting zone on the VIEW (6x8)
@@ -454,25 +488,44 @@ function toggleRemoveMode() {
     }
 }
 
+function showTransitionScreen() {
+    ui.gameLayout.classList.add('hidden');
+    ui.draftHeader.classList.add('hidden');
+    ui.draftFooter.classList.add('hidden');
+    ui.transitionTitle.textContent = `Player ${currentPlayer}'s Turn`;
+    ui.statusBar.textContent = `Waiting for Player ${currentPlayer}`;
+    showScreen(ui.transitionScreen);
+}
+
 function startDraftPhase(player) {
     currentPlayer = player;
     gameState = `draft${player}`;
     
-    // Online mode: Never rotate the board, player is always at the bottom
+    if (!currentRoomCode) {
+        if (player === 2) {
+            ui.gameContainer.classList.add('rotate-180');
+        } else {
+            ui.gameContainer.classList.remove('rotate-180');
+        }
+    }
     
     ui.statusBar.classList.remove('hidden'); // Ensure visible
     
-    // Bypass the old transition screen, go straight to drafting!
-    showScreen(ui.draftHeader);
-    ui.draftFooter.classList.remove('hidden');
-    ui.gameLayout.classList.remove('hidden');
-    ui.gameContainer.classList.add('draft-mode');
-    createBoardDOM(true);
-    setupColorPicker();
-    updateShopColors();
-    updateDraftUI();
-    renderBoard();
-    ui.statusBar.textContent = `Draft Phase: Build your army!`;
+    if (!currentRoomCode && player === 2) {
+        showTransitionScreen();
+    } else {
+        // Bypass the old transition screen, go straight to drafting!
+        showScreen(ui.draftHeader);
+        ui.draftFooter.classList.remove('hidden');
+        ui.gameLayout.classList.remove('hidden');
+        ui.gameContainer.classList.add('draft-mode');
+        createBoardDOM(true);
+        setupColorPicker();
+        updateShopColors();
+        updateDraftUI();
+        renderBoard();
+        ui.statusBar.textContent = `Draft Phase: Build your army!`;
+    }
 }
 
 function handleTransitionReady() {
@@ -498,7 +551,7 @@ function updateShopColors() {
 function setupColorPicker() {
     ui.colorSwatches.forEach(s => s.classList.remove('disabled', 'selected'));
 
-    const opponentPlayer = myPlayerNumber === 1 ? 2 : 1;
+    const opponentPlayer = currentRoomCode ? (myPlayerNumber === 1 ? 2 : 1) : (currentPlayer === 1 ? 2 : 1);
     const opponentColor = playerColors[opponentPlayer];
     
     // Disable opponent's color
@@ -630,30 +683,42 @@ function clearCurrentDraft() {
 }
 
 function validateDraft() {
-    // Extract pieces for myPlayerNumber
-    const myPieces = [];
-    const zone = getDraftZoneView();
-    for (let viewR = zone.min; viewR <= zone.max; viewR++) {
-        for (let viewC = 0; viewC < COLS; viewC++) {
-            const { r, c } = getBoardCoords(viewR, viewC);
-            if (board[r][c] && board[r][c].player === myPlayerNumber) {
-                myPieces.push({ r, c, type: board[r][c].type });
+    if (currentRoomCode) {
+        // Extract pieces for myPlayerNumber
+        const myPieces = [];
+        const zone = getDraftZoneView();
+        for (let viewR = zone.min; viewR <= zone.max; viewR++) {
+            for (let viewC = 0; viewC < COLS; viewC++) {
+                const { r, c } = getBoardCoords(viewR, viewC);
+                if (board[r][c] && board[r][c].player === myPlayerNumber) {
+                    myPieces.push({ r, c, type: board[r][c].type });
+                }
             }
         }
-    }
-    
-    socket.emit('draftComplete', {
-        roomCode: currentRoomCode,
-        player: myPlayerNumber,
-        color: playerColors[myPlayerNumber],
-        pieces: myPieces
-    });
+        
+        socket.emit('draftComplete', {
+            roomCode: currentRoomCode,
+            player: myPlayerNumber,
+            color: playerColors[myPlayerNumber],
+            pieces: myPieces
+        });
 
-    // Hide draft UI and show waiting message
-    ui.draftHeader.classList.add('hidden');
-    ui.draftFooter.classList.add('hidden');
-    ui.statusBar.textContent = "Waiting for opponent to finish drafting...";
-    ui.btnValidateDraft.disabled = true;
+        // Hide draft UI and show waiting message
+        ui.draftHeader.classList.add('hidden');
+        ui.draftFooter.classList.add('hidden');
+        ui.statusBar.textContent = "Waiting for opponent to finish drafting...";
+        ui.btnValidateDraft.disabled = true;
+    } else {
+        if (currentPlayer === 1) {
+            startDraftPhase(2);
+        } else {
+            // Both drafted! Start coin flip.
+            ui.draftHeader.classList.add('hidden');
+            ui.draftFooter.classList.add('hidden');
+            const winner = Math.random() < 0.5 ? 1 : 2;
+            startGameplay(winner);
+        }
+    }
 }
 
 // --- Gameplay Logic ---
@@ -663,7 +728,8 @@ function startGameplay(winner) {
     positionHistory = {}; // Reset repetition history
     ui.statusBar.classList.add('hidden'); // Hide status bar during match
     
-    // Board is now flipped via getBoardCoords logic, no CSS rotation needed
+    ui.gameContainer.classList.remove('rotate-180');
+    ui.gameContainer.classList.remove('draft-mode');
     
     ui.gameLayout.classList.remove('hidden');
     createBoardDOM(false);
@@ -674,7 +740,6 @@ function startGameplay(winner) {
 function finalizeGameplayStart() {
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
     ui.sideStatus.classList.remove('hidden'); // Show timer
-    ui.gameContainer.classList.remove('draft-mode');
     
     selectedBoardPiece = null;
     clearHighlights();
@@ -700,9 +765,14 @@ function startTurn() {
         
         if (myPlayerNumber === winner) {
             fireConfetti([winnerColorHex, '#f1c40f']);
-            endGame('Victory!', `TOUCHDOWN! You survived in the endzone!`);
+            endGame('Victory!', `TOUCHDOWN! You survived in the endzone!`, winner);
         } else {
-            endGame('Defeat...', `TOUCHDOWN! Player ${winner} survived in the endzone!`);
+            if (!currentRoomCode) {
+                fireConfetti([winnerColorHex, '#f1c40f']);
+                endGame('Victory!', `TOUCHDOWN! Player ${winner} survived in the endzone!`, winner);
+            } else {
+                endGame('Defeat...', `TOUCHDOWN! Player ${winner} survived in the endzone!`, winner);
+            }
         }
         return;
     }
@@ -713,7 +783,7 @@ function startTurn() {
         const p1Color = COLOR_HEX[playerColors[1]];
         const p2Color = COLOR_HEX[playerColors[2]];
         fireConfetti([p1Color, p2Color], 30);
-        endGame('DRAW', "by 3 repetitions");
+        endGame('DRAW', "by 3 repetitions", 0);
         return;
     }
     
@@ -755,7 +825,7 @@ function skipTurn() {
 
 function renderBoard() {
     const squares = ui.chessboard.children;
-    const viewRows = gameState === 'gameplay' ? ROWS : 8;
+    const viewRows = gameState === 'gameplay' ? ROWS : 6;
     const draftZone = gameState !== 'gameplay' ? getDraftZoneView() : null;
 
     for (let viewR = 0; viewR < viewRows; viewR++) {
@@ -789,6 +859,11 @@ function renderBoard() {
                 span.classList.add('piece-icon');
                 span.textContent = pieceDef.icon;
                 
+                const isOpponent = currentRoomCode ? piece.player !== myPlayerNumber : piece.player === 2;
+                if (gameState === 'gameplay' && isOpponent) {
+                    span.classList.add('piece-rotated');
+                }
+                
                 square.appendChild(span);
                 square.classList.add('has-piece');
                 square.classList.add(`jersey-${playerColors[piece.player]}`);
@@ -798,25 +873,31 @@ function renderBoard() {
 }
 
 function handleGameplaySquareClick(viewR, viewC) {
-    if (currentPlayer !== myPlayerNumber) return; // Ignore if not our turn
+    if (currentRoomCode && currentPlayer !== myPlayerNumber) return; // Ignore if not our turn in online mode
 
     const { r, c } = getBoardCoords(viewR, viewC);
     const clickedPiece = board[r][c];
     const squareEl = getSquareElement(viewR, viewC);
 
     if (selectedBoardPiece && squareEl.classList.contains('highlight')) {
-        // Send move to server
-        socket.emit('makeMove', {
-            roomCode: currentRoomCode,
-            from: { r: selectedBoardPiece.r, c: selectedBoardPiece.c },
-            to: { r, c }
-        });
-        selectedBoardPiece = null;
-        clearHighlights();
+        if (currentRoomCode) {
+            // Send move to server
+            socket.emit('makeMove', {
+                roomCode: currentRoomCode,
+                from: { r: selectedBoardPiece.r, c: selectedBoardPiece.c },
+                to: { r, c }
+            });
+            selectedBoardPiece = null;
+            clearHighlights();
+        } else {
+            // Local mode
+            movePiece(selectedBoardPiece.r, selectedBoardPiece.c, r, c);
+        }
         return;
     }
 
-    if (clickedPiece && clickedPiece.player === myPlayerNumber) {
+    const activePlayer = currentRoomCode ? myPlayerNumber : currentPlayer;
+    if (clickedPiece && clickedPiece.player === activePlayer) {
         selectedBoardPiece = { r, c, piece: clickedPiece };
         highlightValidMoves(r, c);
     } else {
@@ -956,9 +1037,10 @@ function movePiece(fromR, fromC, toR, toC) {
     renderBoard();
 
     if (targetPiece && targetPiece.type === 'k') {
-        const winnerColorHex = COLOR_HEX[playerColors[currentPlayer]];
+        const winner = currentPlayer;
+        const winnerColorHex = COLOR_HEX[playerColors[winner]];
         fireConfetti([winnerColorHex, '#f1c40f']);
-        endGame('Victory!', `Player ${currentPlayer} captured the King!`);
+        endGame('Victory!', `Player ${winner} captured the King!`, winner);
         return;
     }
 
@@ -972,17 +1054,31 @@ function isTouchdown(piece, r) {
     return false;
 }
 
-function endGame(title, reason) {
+function endGame(title, reason, winner) {
     gameState = 'over';
     clearInterval(timerInterval);
     ui.victoryTitle.textContent = title;
     ui.victoryReason.textContent = reason;
+    
+    const canvas = document.getElementById('confetti-canvas');
+    if (!currentRoomCode && winner === 2) {
+        ui.victoryScreen.classList.add('rotate-180');
+        if (canvas) canvas.classList.add('rotate-180');
+    } else {
+        ui.victoryScreen.classList.remove('rotate-180');
+        if (canvas) canvas.classList.remove('rotate-180');
+    }
+    
     showScreen(ui.victoryScreen);
 }
 
 function resetGame() {
     clearInterval(timerInterval);
     ui.sideStatus.classList.add('hidden');
+    ui.gameContainer.classList.remove('rotate-180');
+    ui.victoryScreen.classList.remove('rotate-180');
+    const canvas = document.getElementById('confetti-canvas');
+    if (canvas) canvas.classList.remove('rotate-180');
     board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
     draftPoints = { 1: MAX_POINTS, 2: MAX_POINTS };
     kingsPlaced = { 1: false, 2: false };
