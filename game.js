@@ -82,6 +82,9 @@ const ui = {
     btnClearDraft: document.getElementById('btn-clear-draft'),
     btnRemoveMode: document.getElementById('btn-remove-mode'),
     btnMainMenu: document.getElementById('btn-main-menu'),
+    btnHowToPlay: document.getElementById('btn-how-to-play'),
+    rulesModal: document.getElementById('rules-modal'),
+    btnCloseRules: document.getElementById('btn-close-rules'),
 };
 
 function serializeBoard() {
@@ -116,6 +119,14 @@ function setupEventListeners() {
         resetGame();
         showScreen(ui.mainMenu);
         ui.statusBar.textContent = "Welcome to Chessdown";
+    });
+    
+    ui.btnHowToPlay.addEventListener('pointerdown', () => {
+        showScreen(ui.rulesModal);
+    });
+    
+    ui.btnCloseRules.addEventListener('pointerdown', () => {
+        showScreen(ui.mainMenu);
     });
     
     ui.shopItems.forEach(item => {

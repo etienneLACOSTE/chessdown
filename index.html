@@ -17,6 +17,33 @@
         <div id="main-menu" class="screen active">
             <h2>Ready for the big game?</h2>
             <button id="btn-start-local" class="btn-primary">Play Local (2 Players)</button>
+            <button id="btn-how-to-play" class="btn-secondary" style="margin-top: 15px;">How to Play</button>
+        </div>
+
+        <!-- How to Play Modal -->
+        <div id="rules-modal" class="screen hidden" style="background: rgba(0,0,0,0.95); justify-content: flex-start; overflow-y: auto; padding: 40px 20px; text-align: left; z-index: 200;">
+            <h2 style="color: #f1c40f; text-align: center; margin-bottom: 20px; font-size: 2em;">How to Play Chessdown</h2>
+            <div style="max-width: 600px; margin: 0 auto; color: white; line-height: 1.6; font-size: 16px;">
+                <h3 style="color: var(--secondary); margin-top: 20px;">🎯 Goal</h3>
+                <p>1. <strong>Capture the King:</strong> Take the opponent's King.</p>
+                <p>2. <strong>Touchdown:</strong> Reach the opponent's Endzone (the last row) with any piece and survive there for one full turn.</p>
+                
+                <h3 style="color: var(--secondary); margin-top: 20px;">🛠️ Draft Phase</h3>
+                <p>You have <strong>39 points</strong> to buy your custom army. You must buy exactly 1 King. Place your pieces secretly in your deployment zone and pick your team color.</p>
+
+                <h3 style="color: var(--secondary); margin-top: 20px;">⏱️ Gameplay</h3>
+                <p>Pieces move exactly like in traditional chess. However, you only have <strong>10 seconds</strong> per turn! If the timer runs out, your turn is skipped.</p>
+
+                <h3 style="color: var(--danger); margin-top: 20px;">⚠️ Differences with Chess</h3>
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li style="margin-bottom: 5px;"><strong>No Checkmate:</strong> There is no "check" warning. The King must be physically captured.</li>
+                    <li style="margin-bottom: 5px;"><strong>The Board:</strong> It's 8x12, longer than a standard chessboard.</li>
+                    <li><strong>Speed:</strong> 10 second forced timer!</li>
+                </ul>
+            </div>
+            <div style="text-align: center; margin-top: 30px; width: 100%;">
+                <button id="btn-close-rules" class="btn-primary">Got it!</button>
+            </div>
         </div>
 
         <!-- Écran de Pile ou Face -->
