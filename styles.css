@@ -27,6 +27,7 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow: hidden;
     /* Touch Shield */
     touch-action: none;
@@ -38,6 +39,7 @@ body {
 #game-container {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     transition: transform 0.5s ease-in-out; /* For 180deg rotation */

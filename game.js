@@ -4,12 +4,12 @@ const COLS = 8;
 const MAX_POINTS = 39;
 
 const PIECES = {
-    'p': { value: 1, icon: '♟' },
-    'n': { value: 3, icon: '♞' },
-    'b': { value: 3, icon: '♝' },
-    'r': { value: 5, icon: '♜' },
-    'q': { value: 9, icon: '♛' },
-    'k': { value: 0, icon: '♚' }
+    'p': { value: 1, icon: '♟\uFE0E' },
+    'n': { value: 3, icon: '♞\uFE0E' },
+    'b': { value: 3, icon: '♝\uFE0E' },
+    'r': { value: 5, icon: '♜\uFE0E' },
+    'q': { value: 9, icon: '♛\uFE0E' },
+    'k': { value: 0, icon: '♚\uFE0E' }
 };
 
 const COLOR_HEX = {
