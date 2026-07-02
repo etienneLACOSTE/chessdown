@@ -1,3 +1,8 @@
+// Socket.io Client
+const socket = io();
+let currentRoomCode = null;
+let myPlayerNumber = 1;
+
 // Constants
 const ROWS = 12;
 const COLS = 8;
@@ -106,20 +111,161 @@ function init() {
 }
 
 function setupEventListeners() {
-    document.getElementById('btn-start-local').addEventListener('pointerdown', () => {
-        enterFullscreen();
-        startDraftPhase(1);
+    const btnCreateRoom = document.getElementById('btn-create-room');
+    const btnJoinRoom = document.getElementById('btn-join-room');
+    const inputRoomCode = document.getElementById('room-code-input');
+
+    if (btnCreateRoom) {
+        btnCreateRoom.addEventListener('pointerdown', () => {
+            enterFullscreen();
+            socket.emit('createRoom');
+        });
+    }
+
+    if (btnJoinRoom) {
+        btnJoinRoom.addEventListener('pointerdown', () => {
+            enterFullscreen();
+            const code = inputRoomCode.value.trim().toUpperCase();
+            if (code.length === 4) {
+                socket.emit('joinRoom', code);
+            } else {
+                alert("Please enter a valid 4-letter code.");
+            }
+        });
+    }
+
+    // Socket Events
+    socket.on('roomCreated', (code) => {
+        currentRoomCode = code;
+        myPlayerNumber = 1;
+        document.getElementById('waiting-room-code').textContent = code;
+        showScreen(document.getElementById('waiting-screen'));
     });
-    document.getElementById('btn-ready').addEventListener('pointerdown', handleTransitionReady);
-    document.getElementById('btn-restart').addEventListener('pointerdown', () => {
+
+    socket.on('roomJoined', (data) => {
+        currentRoomCode = data.roomCode;
+        myPlayerNumber = data.playerNumber;
+    });
+
+    socket.on('gameStarted', (data) => {
+        startDraftPhase(myPlayerNumber);
+    });
+
+    socket.on('draftPhaseEnded', (data) => {
+        // Sync the fully merged board and colors from server
+        board = data.roomState.board;
+        playerColors = data.roomState.playerColors;
+        startGameplay(data.roomState.currentPlayer);
+    });
+
+    // Brute-force color sync to bypass any UI listener issues
+    setInterval(() => {
+        if (currentRoomCode && gameState.startsWith('draft')) {
+            socket.emit('colorSelected', { 
+                roomCode: currentRoomCode, 
+                player: myPlayerNumber, 
+                color: playerColors[myPlayerNumber] 
+            });
+        }
+    }, 500);
+
+    socket.on('moveMade', (data) => {
+        const { from, to, nextPlayer } = data;
+        const targetPiece = board[to.r][to.c];
+        const piece = board[from.r][from.c];
+        
+        // Handle King capture
+        if (targetPiece && targetPiece.type === 'k') {
+            const winner = piece.player;
+            const winnerColorHex = COLOR_HEX[playerColors[winner]];
+            
+            // Move piece to king spot for visual satisfaction
+            board[to.r][to.c] = piece;
+            board[from.r][from.c] = null;
+            if (piece) piece.hasMoved = true;
+            renderBoard();
+
+            if (myPlayerNumber === winner) {
+                fireConfetti([winnerColorHex, '#f1c40f']);
+                endGame('Victory!', `You captured the King!`);
+            } else {
+                endGame('Defeat...', `Player ${winner} captured your King.`);
+            }
+            return;
+        }
+
+        board[to.r][to.c] = piece;
+        board[from.r][from.c] = null;
+        if (piece) piece.hasMoved = true;
+        
+        currentPlayer = nextPlayer;
+        selectedBoardPiece = null;
+        clearHighlights();
+        renderBoard();
+        startTurn();
+    });
+
+    socket.on('playAgainStatus', (data) => {
+        const btn = document.getElementById('btn-restart');
+        if (btn && !btn.disabled) btn.textContent = `Play Again (${data.count}/2)`;
+    });
+
+    socket.on('opponentColorChanged', (color) => {
+        const opponentPlayer = myPlayerNumber === 1 ? 2 : 1;
+        playerColors[opponentPlayer] = color;
+        if (gameState.startsWith('draft')) {
+            setupColorPicker();
+        }
+    });
+
+    socket.on('gameRestarted', () => {
+        const btn = document.getElementById('btn-restart');
+        if (btn) {
+            btn.textContent = "Play Again";
+            btn.disabled = false;
+        }
+        ui.victoryScreen.classList.add('hidden');
+        
+        // Reset local draft state
+        draftPoints = { 1: MAX_POINTS, 2: MAX_POINTS };
+        kingsPlaced = { 1: false, 2: false };
+        
+        startDraftPhase(myPlayerNumber);
+    });
+
+    socket.on('opponentLeft', () => {
+        alert("Your opponent left the game.");
         resetGame();
-        startDraftPhase(1);
+        showScreen(ui.mainMenu);
+    });
+
+    socket.on('errorMsg', (msg) => {
+        alert(msg);
     });
     ui.btnMainMenu.addEventListener('pointerdown', () => {
+        if (currentRoomCode) {
+            socket.emit('leaveRoom', { roomCode: currentRoomCode });
+            currentRoomCode = null;
+        }
         resetGame();
         showScreen(ui.mainMenu);
         ui.statusBar.textContent = "Welcome to Chessdown";
     });
+
+    const btnRestart = document.getElementById('btn-restart');
+    if (btnRestart) {
+        btnRestart.addEventListener('pointerdown', () => {
+            if (currentRoomCode) {
+                socket.emit('playAgainRequest', { roomCode: currentRoomCode });
+                btnRestart.textContent = "Waiting... (1/2)";
+                btnRestart.disabled = true;
+            } else {
+                // Fallback for local
+                resetGame();
+                startDraftPhase(1);
+            }
+        });
+    }
     
     ui.btnHowToPlay.addEventListener('pointerdown', () => {
         showScreen(ui.rulesModal);
@@ -149,6 +295,10 @@ function setupEventListeners() {
             playerColors[currentPlayer] = swatch.dataset.color;
             updateShopColors();
             renderBoard(); // Update piece colors dynamically
+            
+            if (currentRoomCode) {
+                socket.emit('colorSelected', { roomCode: currentRoomCode, player: myPlayerNumber, color: swatch.dataset.color });
+            }
         });
     });
 
@@ -181,12 +331,25 @@ function enterFullscreen() {
 // P1 draft rows 0-5 map to board rows 6-11.
 // P2 draft rows 0-5 map to board rows 5-0 (inverted).
 function getBoardCoords(viewR, viewC) {
-    if (gameState === 'gameplay') return { r: viewR, c: viewC };
-    if (currentPlayer === 1) {
-        return { r: viewR + 6, c: viewC };
+    if (myPlayerNumber === 1) {
+        return { r: viewR + (gameState === 'gameplay' ? 0 : 4), c: viewC };
     } else {
-        return { r: 5 - viewR, c: 7 - viewC };
+        if (gameState === 'gameplay') {
+            return { r: (ROWS - 1) - viewR, c: (COLS - 1) - viewC };
+        } else {
+            return { r: 7 - viewR, c: 7 - viewC };
+        }
     }
+}
+
+function getViewCoords(r, c) {
+    if (gameState === 'gameplay') {
+        if (myPlayerNumber === 1) return { viewR: r, viewC: c };
+        else return { viewR: 11 - r, viewC: 7 - c };
+    }
+    // draft mode mapping
+    if (myPlayerNumber === 1) return { viewR: r - 6, viewC: c };
+    else return { viewR: 5 - r, viewC: 7 - c };
 }
 
 // Returns the drafting zone on the VIEW (6x8)
@@ -210,8 +373,13 @@ function createBoardDOM(isDraft) {
         ui.endzoneTop.classList.remove('hidden');
         ui.endzoneBottom.classList.remove('hidden');
         // Set endzone colors based on jerseys
-        ui.endzoneTop.className = `endzone endzone-${playerColors[2]}`;
-        ui.endzoneBottom.className = `endzone endzone-${playerColors[1]}`;
+        if (myPlayerNumber === 2) {
+            ui.endzoneTop.className = `endzone endzone-${playerColors[1]}`;
+            ui.endzoneBottom.className = `endzone endzone-${playerColors[2]}`;
+        } else {
+            ui.endzoneTop.className = `endzone endzone-${playerColors[2]}`;
+            ui.endzoneBottom.className = `endzone endzone-${playerColors[1]}`;
+        }
     }
 
     for (let viewR = 0; viewR < viewRows; viewR++) {
@@ -241,7 +409,7 @@ function createBoardDOM(isDraft) {
 
 // --- Coin Flip ---
 
-function startCoinFlip() {
+function startCoinFlip(winner) {
     showScreen(ui.coinFlipScreen);
     
     // Apply chosen colors to the coin faces
@@ -255,8 +423,8 @@ function startCoinFlip() {
     // Force reflow
     void ui.coin.offsetWidth;
 
-    // Determine winner
-    const result = Math.random() < 0.5 ? 1 : 2;
+    // Determine winner from server
+    const result = winner;
     const spinDegrees = result === 1 ? 3600 : 3780; // 10 spins instead of 5
 
     ui.coin.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)';
@@ -289,20 +457,22 @@ function toggleRemoveMode() {
 function startDraftPhase(player) {
     currentPlayer = player;
     gameState = `draft${player}`;
-    if (player === 2) {
-        ui.gameContainer.classList.add('rotate-180');
-    } else {
-        ui.gameContainer.classList.remove('rotate-180');
-    }
+    
+    // Online mode: Never rotate the board, player is always at the bottom
+    
     ui.statusBar.classList.remove('hidden'); // Ensure visible
-    showTransitionScreen();
-}
-
-function showTransitionScreen() {
-    ui.gameLayout.classList.add('hidden');
-    ui.transitionTitle.textContent = `Player ${currentPlayer}'s Turn`;
-    ui.statusBar.textContent = `Waiting for Player ${currentPlayer}`;
-    showScreen(ui.transitionScreen);
+    
+    // Bypass the old transition screen, go straight to drafting!
+    showScreen(ui.draftHeader);
+    ui.draftFooter.classList.remove('hidden');
+    ui.gameLayout.classList.remove('hidden');
+    ui.gameContainer.classList.add('draft-mode');
+    createBoardDOM(true);
+    setupColorPicker();
+    updateShopColors();
+    updateDraftUI();
+    renderBoard();
+    ui.statusBar.textContent = `Draft Phase: Build your army!`;
 }
 
 function handleTransitionReady() {
@@ -326,22 +496,25 @@ function updateShopColors() {
 }
 
 function setupColorPicker() {
-    // Enable all by default
-    ui.colorSwatches.forEach(s => {
-        s.classList.remove('disabled', 'selected');
-    });
+    ui.colorSwatches.forEach(s => s.classList.remove('disabled', 'selected'));
 
-    // If second player drafting, disable first player's color
-    if (currentDraftIndex === 1) {
-        const p1 = draftOrder[0];
-        const p1Color = playerColors[p1];
-        const disabledSwatch = document.querySelector(`.color-swatch[data-color="${p1Color}"]`);
-        if (disabledSwatch) disabledSwatch.classList.add('disabled');
-        
-        // Auto select a different default color if current is disabled
-        if (playerColors[currentPlayer] === p1Color) {
-            const available = document.querySelector(`.color-swatch:not(.disabled)`);
-            if (available) playerColors[currentPlayer] = available.dataset.color;
+    const opponentPlayer = myPlayerNumber === 1 ? 2 : 1;
+    const opponentColor = playerColors[opponentPlayer];
+    
+    // Disable opponent's color
+    const disabledSwatch = document.querySelector(`.color-swatch[data-color="${opponentColor}"]`);
+    if (disabledSwatch) disabledSwatch.classList.add('disabled');
+
+    // Auto select a different default color if current is disabled
+    if (playerColors[currentPlayer] === opponentColor) {
+        const available = document.querySelector(`.color-swatch:not(.disabled)`);
+        if (available) {
+            playerColors[currentPlayer] = available.dataset.color;
+            updateShopColors();
+            renderBoard();
+            if (currentRoomCode) {
+                socket.emit('colorSelected', { roomCode: currentRoomCode, player: myPlayerNumber, color: playerColors[currentPlayer] });
+            }
         }
     }
 
@@ -457,25 +630,45 @@ function clearCurrentDraft() {
 }
 
 function validateDraft() {
-    currentDraftIndex++;
-    if (currentDraftIndex < 2) {
-        startDraftPhase(2);
-    } else {
-        startGameplay();
+    // Extract pieces for myPlayerNumber
+    const myPieces = [];
+    const zone = getDraftZoneView();
+    for (let viewR = zone.min; viewR <= zone.max; viewR++) {
+        for (let viewC = 0; viewC < COLS; viewC++) {
+            const { r, c } = getBoardCoords(viewR, viewC);
+            if (board[r][c] && board[r][c].player === myPlayerNumber) {
+                myPieces.push({ r, c, type: board[r][c].type });
+            }
+        }
     }
+    
+    socket.emit('draftComplete', {
+        roomCode: currentRoomCode,
+        player: myPlayerNumber,
+        color: playerColors[myPlayerNumber],
+        pieces: myPieces
+    });
+
+    // Hide draft UI and show waiting message
+    ui.draftHeader.classList.add('hidden');
+    ui.draftFooter.classList.add('hidden');
+    ui.statusBar.textContent = "Waiting for opponent to finish drafting...";
+    ui.btnValidateDraft.disabled = true;
 }
 
 // --- Gameplay Logic ---
 
-function startGameplay() {
+function startGameplay(winner) {
     gameState = 'gameplay';
     positionHistory = {}; // Reset repetition history
     ui.statusBar.classList.add('hidden'); // Hide status bar during match
-    ui.gameContainer.classList.remove('rotate-180'); // ensure board is facing J1
+    
+    // Board is now flipped via getBoardCoords logic, no CSS rotation needed
+    
     ui.gameLayout.classList.remove('hidden');
     createBoardDOM(false);
     renderBoard();
-    startCoinFlip();
+    startCoinFlip(winner);
 }
 
 function finalizeGameplayStart() {
@@ -502,9 +695,15 @@ function checkTouchdownWin() {
 
 function startTurn() {
     if (checkTouchdownWin()) {
-        const winnerColorHex = COLOR_HEX[playerColors[currentPlayer]];
-        fireConfetti([winnerColorHex, '#f1c40f']);
-        endGame('Victory!', `TOUCHDOWN! Player ${currentPlayer} survived in the endzone!`);
+        const winner = currentPlayer;
+        const winnerColorHex = COLOR_HEX[playerColors[winner]];
+        
+        if (myPlayerNumber === winner) {
+            fireConfetti([winnerColorHex, '#f1c40f']);
+            endGame('Victory!', `TOUCHDOWN! You survived in the endzone!`);
+        } else {
+            endGame('Defeat...', `TOUCHDOWN! Player ${winner} survived in the endzone!`);
+        }
         return;
     }
     
@@ -589,9 +788,6 @@ function renderBoard() {
                 const span = document.createElement('span');
                 span.classList.add('piece-icon');
                 span.textContent = pieceDef.icon;
-                if (gameState === 'gameplay' && piece.player === 2) {
-                    span.classList.add('piece-rotated');
-                }
                 
                 square.appendChild(span);
                 square.classList.add('has-piece');
@@ -601,16 +797,26 @@ function renderBoard() {
     }
 }
 
-function handleGameplaySquareClick(r, c) {
-    const clickedPiece = board[r][c];
+function handleGameplaySquareClick(viewR, viewC) {
+    if (currentPlayer !== myPlayerNumber) return; // Ignore if not our turn
 
-    const squareEl = getSquareElement(r, c);
+    const { r, c } = getBoardCoords(viewR, viewC);
+    const clickedPiece = board[r][c];
+    const squareEl = getSquareElement(viewR, viewC);
+
     if (selectedBoardPiece && squareEl.classList.contains('highlight')) {
-        movePiece(selectedBoardPiece.r, selectedBoardPiece.c, r, c);
+        // Send move to server
+        socket.emit('makeMove', {
+            roomCode: currentRoomCode,
+            from: { r: selectedBoardPiece.r, c: selectedBoardPiece.c },
+            to: { r, c }
+        });
+        selectedBoardPiece = null;
+        clearHighlights();
         return;
     }
 
-    if (clickedPiece && clickedPiece.player === currentPlayer) {
+    if (clickedPiece && clickedPiece.player === myPlayerNumber) {
         selectedBoardPiece = { r, c, piece: clickedPiece };
         highlightValidMoves(r, c);
     } else {
@@ -632,11 +838,14 @@ function clearHighlights() {
 
 function highlightValidMoves(r, c) {
     clearHighlights();
-    getSquareElement(r, c).classList.add('selected');
+    const { viewR: vr, viewC: vc } = getViewCoords(r, c);
+    getSquareElement(vr, vc).classList.add('selected');
 
     const moves = getValidMoves(r, c);
     moves.forEach(m => {
-        getSquareElement(m.r, m.c).classList.add('highlight');
+        const { viewR, viewC } = getViewCoords(m.r, m.c);
+        const sq = getSquareElement(viewR, viewC);
+        if (sq) sq.classList.add('highlight');
     });
 }
 
@@ -774,7 +983,6 @@ function endGame(title, reason) {
 function resetGame() {
     clearInterval(timerInterval);
     ui.sideStatus.classList.add('hidden');
-    ui.gameContainer.classList.remove('rotate-180');
     board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
     draftPoints = { 1: MAX_POINTS, 2: MAX_POINTS };
     kingsPlaced = { 1: false, 2: false };

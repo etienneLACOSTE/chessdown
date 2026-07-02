@@ -16,8 +16,19 @@
         <!-- Menu Principal -->
         <div id="main-menu" class="screen active">
             <h2>Ready for the big game?</h2>
-            <button id="btn-start-local" class="btn-primary">Play Local (2 Players)</button>
+            <button id="btn-create-room" class="btn-primary" style="margin-top: 15px;">Create Online Room</button>
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; align-items: center;">
+                <input type="text" id="room-code-input" placeholder="CODE" maxlength="4" style="padding: 10px; font-size: 16px; width: 100px; text-align: center; text-transform: uppercase; border-radius: 5px; border: 1px solid #ccc;">
+                <button id="btn-join-room" class="btn-success">Join Room</button>
+            </div>
             <button id="btn-how-to-play" class="btn-secondary" style="margin-top: 15px;">How to Play</button>
+        </div>
+
+        <!-- Waiting Screen (Online) -->
+        <div id="waiting-screen" class="screen hidden">
+            <h2 id="waiting-room-code" style="color: #f1c40f; font-size: 4em; margin-bottom: 20px; letter-spacing: 5px;">ABCD</h2>
+            <p>Share this code with your opponent.</p>
+            <p style="margin-top: 15px; color: #3498db;">Waiting for Player 2 to join...</p>
         </div>
 
         <!-- How to Play Modal -->
@@ -141,7 +152,8 @@
     <!-- Canvas pour les confettis -->
     <canvas id="confetti-canvas"></canvas>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script src="confetti.js"></script>
-    <script src="game.js"></script>
+    <script src="game.js?v=10"></script>
 </body>
 </html>
