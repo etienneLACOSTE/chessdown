@@ -283,6 +283,8 @@ button:disabled {
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(16, 1fr);
     width: 100%;
+    max-height: 65vh;
+    max-width: 32.5vh;
     aspect-ratio: 1 / 2;
     border: 3px solid #fff;
     position: relative;
@@ -447,4 +449,35 @@ button:disabled {
     height: 100%;
     pointer-events: none;
     z-index: 9999;
+}
+
+/* --- Media Queries for Responsiveness --- */
+@media (max-width: 600px), (max-height: 800px) {
+    h1 {
+        font-size: 20px;
+    }
+    
+    .shop-item {
+        padding: 3px 6px;
+    }
+    .shop-item .icon {
+        font-size: 20px;
+    }
+    .shop-item .name {
+        font-size: 10px;
+    }
+    
+    button {
+        padding: 8px 15px;
+        font-size: 14px;
+        margin: 5px;
+    }
+    
+    .points-counter {
+        font-size: 16px;
+    }
+
+    #draft-ui {
+        padding: 5px;
+    }
 }

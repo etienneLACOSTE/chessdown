@@ -103,23 +103,23 @@ function init() {
 }
 
 function setupEventListeners() {
-    document.getElementById('btn-start-local').addEventListener('click', () => {
+    document.getElementById('btn-start-local').addEventListener('pointerdown', () => {
         enterFullscreen();
         startDraftPhase(1);
     });
-    document.getElementById('btn-ready').addEventListener('click', handleTransitionReady);
-    document.getElementById('btn-restart').addEventListener('click', () => {
+    document.getElementById('btn-ready').addEventListener('pointerdown', handleTransitionReady);
+    document.getElementById('btn-restart').addEventListener('pointerdown', () => {
         resetGame();
         startDraftPhase(1);
     });
-    ui.btnMainMenu.addEventListener('click', () => {
+    ui.btnMainMenu.addEventListener('pointerdown', () => {
         resetGame();
         showScreen(ui.mainMenu);
         ui.statusBar.textContent = "Welcome to Chessdown";
     });
     
     ui.shopItems.forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('pointerdown', () => {
             if (removeMode) toggleRemoveMode();
             ui.shopItems.forEach(i => i.classList.remove('selected'));
             item.classList.add('selected');
@@ -131,7 +131,7 @@ function setupEventListeners() {
     });
 
     ui.colorSwatches.forEach(swatch => {
-        swatch.addEventListener('click', () => {
+        swatch.addEventListener('pointerdown', () => {
             if (swatch.classList.contains('disabled')) return;
             ui.colorSwatches.forEach(s => s.classList.remove('selected'));
             swatch.classList.add('selected');
@@ -141,9 +141,9 @@ function setupEventListeners() {
         });
     });
 
-    ui.btnRemoveMode.addEventListener('click', toggleRemoveMode);
-    ui.btnClearDraft.addEventListener('click', clearCurrentDraft);
-    ui.btnValidateDraft.addEventListener('click', validateDraft);
+    ui.btnRemoveMode.addEventListener('pointerdown', toggleRemoveMode);
+    ui.btnClearDraft.addEventListener('pointerdown', clearCurrentDraft);
+    ui.btnValidateDraft.addEventListener('pointerdown', validateDraft);
 }
 
 function showScreen(screen) {
@@ -222,7 +222,7 @@ function createBoardDOM(isDraft) {
 
             square.dataset.vr = viewR;
             square.dataset.vc = viewC;
-            square.addEventListener('click', () => handleSquareClick(viewR, viewC));
+            square.addEventListener('pointerdown', () => handleSquareClick(viewR, viewC));
             ui.chessboard.appendChild(square);
         }
     }
