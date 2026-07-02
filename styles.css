@@ -207,7 +207,7 @@ button:disabled {
 .shop-item.selected { border-color: var(--secondary); background: rgba(39, 174, 96, 0.2); }
 .shop-item.disabled { opacity: 0.3; cursor: not-allowed; }
 
-.shop-item .icon { font-size: 24px; }
+.shop-item .icon { font-size: 24px; font-family: 'Arial', 'Helvetica', sans-serif; }
 .shop-item .name { font-size: 12px; }
 .shop-item .cost { font-size: 10px; color: #aaa; }
 

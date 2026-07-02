@@ -189,7 +189,7 @@ function createBoardDOM(isDraft) {
     
     ui.chessboard.style.gridTemplateRows = `repeat(${viewRows}, 1fr)`;
     ui.chessboard.style.aspectRatio = isDraft ? '1 / 1' : '1 / 2';
-    ui.chessboard.style.maxWidth = isDraft ? 'min(100%, 60vh)' : 'min(100%, 45vh)';
+    ui.chessboard.style.maxWidth = isDraft ? 'min(100%, 45vh)' : 'min(100%, 45vh)';
 
     // Hide endzones during draft
     if (isDraft) {
